@@ -49,6 +49,14 @@ jobs:
           test -f source/VENEX_V0.1.8/scripts/fetch-llama-cpp.sh
           echo "VENEX_ROOT=$GITHUB_WORKSPACE/source/VENEX_V0.1.8" >> "$GITHUB_ENV"
 
+      - name: Inspect failing Kotlin source context
+        run: |
+          FILE=source/VENEX_V0.1.8/app/src/main/kotlin/com/venex/app/ui/ChatScreen.kt
+          echo "--- ChatScreen.kt imports and declarations ---"
+          sed -n '1,125p' "$FILE"
+          echo "--- ChatScreen.kt second failure context ---"
+          sed -n '195,230p' "$FILE"
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
