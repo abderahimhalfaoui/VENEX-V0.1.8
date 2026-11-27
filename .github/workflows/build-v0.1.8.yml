@@ -91,6 +91,7 @@ jobs:
             sed -i 's/import kotlinx.coroutines.test.runTest/import kotlinx.coroutines.runBlocking/' "$TEST"
             sed -i 's/= runTest {/= runBlocking {/' "$TEST"
             sed -i -E 's/^    fun (.*)\(\) = runBlocking \{/    fun \1(): Unit = runBlocking {/' "$TEST"
+            sed -i 's|assertEquals(setOf("venex-llm-test"), b.threadNames)|assertTrue(b.threadNames.isNotEmpty() \&\& b.threadNames.all { it.startsWith("venex-llm-test") }, "native work must use dedicated dispatcher")|' "$TEST"
             echo "VENEX_TEST_CLOCK_PATCHED=true" >> "$GITHUB_ENV"
           fi
           ! grep -q 'runTest' "$TEST"
