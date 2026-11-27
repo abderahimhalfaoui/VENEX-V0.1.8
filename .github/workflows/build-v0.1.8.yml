@@ -19,7 +19,7 @@ on:
           - x86_64
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: venex-v0.1.8-build-${{ github.ref }}
@@ -53,9 +53,208 @@ jobs:
         working-directory: source/VENEX_V0.1.8
         run: |
           FILE=app/src/main/kotlin/com/venex/app/ui/ChatScreen.kt
-          grep -q '^import androidx.compose.foundation.shape.RectangleShape$' "$FILE"
-          sed -i 's|^import androidx.compose.foundation.shape.RectangleShape$|import androidx.compose.ui.graphics.RectangleShape|' "$FILE"
-          grep -q '^import androidx.compose.ui.graphics.RectangleShape$' "$FILE"
+          if grep -q '^import androidx.compose.foundation.shape.RectangleShape
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android NDK and CMake
+        run: |
+          SDKMANAGER=$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n 1)
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Fetch pinned llama.cpp dependency
+        working-directory: source/VENEX_V0.1.8
+        run: ./scripts/fetch-llama-cpp.sh
+
+      - name: Run core JVM tests
+        working-directory: source/VENEX_V0.1.8
+        run: ./gradlew :core:test --stacktrace
+
+      - name: Inspect LlamaCpp runtime and tests
+        working-directory: source/VENEX_V0.1.8
+        run: |
+          find app/src -type f -print | grep -Ei 'LlamaCpp|llama' > /tmp/venex-llama-files.txt || true
+          echo "===== Matching source and test files ====="
+          cat /tmp/venex-llama-files.txt
+          while IFS= read -r FILE; do
+            echo "===== $FILE ====="
+            sed -n '1,360p' "$FILE"
+          done < /tmp/venex-llama-files.txt
+
+      - name: Correct JVM test clock for real native-thread work
+        working-directory: source/VENEX_V0.1.8
+        run: |
+          TEST=app/src/test/kotlin/com/venex/app/llm/LlamaCppRuntimeTest.kt
+          if grep -q 'import kotlinx.coroutines.test.runTest' "$TEST"; then
+            sed -i 's/import kotlinx.coroutines.test.runTest/import kotlinx.coroutines.runBlocking/' "$TEST"
+            sed -i 's/= runTest {/= runBlocking {/' "$TEST"
+            echo "VENEX_TEST_CLOCK_PATCHED=true" >> "$GITHUB_ENV"
+          fi
+          ! grep -q 'runTest' "$TEST"
+          grep -q 'import kotlinx.coroutines.runBlocking' "$TEST"
+
+      - name: Run Android app unit tests
+        working-directory: source/VENEX_V0.1.8
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Persist verified source fixes to repository archive
+        if: env.VENEX_TEST_CLOCK_PATCHED == 'true'
+        run: |
+          cd source
+          zip -X -qr ../VENEX_V0.1.8.zip VENEX_V0.1.8
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VENEX_V0.1.8.zip
+          git commit -m "fix: use real-time coroutine clock in LLM runtime tests"
+          git push
+
+      - name: Build debug APK
+        working-directory: source/VENEX_V0.1.8
+        run: ./gradlew :app:assembleDebug -Pvenex.abis="$VENEX_ABI" --stacktrace
+
+      - name: Verify APK and version
+        working-directory: source/VENEX_V0.1.8
+        run: |
+          APK=$(find app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -print -quit)
+          test -n "$APK"
+          python3 - "$APK" <<'PY'
+          import json, os, sys
+          metadata = "app/build/outputs/apk/debug/output-metadata.json"
+          with open(metadata, encoding="utf-8") as f:
+              data = json.load(f)
+          item = data["elements"][0]
+          print("APK:", sys.argv[1], "size:", os.path.getsize(sys.argv[1]))
+          print("versionName:", item.get("versionName"), "versionCode:", item.get("versionCode"))
+          if item.get("versionName") != "0.1.8" or int(item.get("versionCode", 0)) != 8:
+              raise SystemExit("Expected VENEX 0.1.8 / versionCode 8")
+          PY
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: venex-v0.1.8-debug-apk
+          path: source/VENEX_V0.1.8/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: venex-v0.1.8-test-reports
+          path: |
+            source/VENEX_V0.1.8/core/build/reports/tests/
+            source/VENEX_V0.1.8/core/build/test-results/
+            source/VENEX_V0.1.8/app/build/reports/tests/
+            source/VENEX_V0.1.8/app/build/test-results/
+          if-no-files-found: warn
+          retention-days: 14
+ "$FILE"; then
+            sed -i 's|^import androidx.compose.foundation.shape.RectangleShape$|import androidx.compose.ui.graphics.RectangleShape|' "$FILE"
+          fi
+          grep -q '^import androidx.compose.ui.graphics.RectangleShape
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android NDK and CMake
+        run: |
+          SDKMANAGER=$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n 1)
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Fetch pinned llama.cpp dependency
+        working-directory: source/VENEX_V0.1.8
+        run: ./scripts/fetch-llama-cpp.sh
+
+      - name: Run core JVM tests
+        working-directory: source/VENEX_V0.1.8
+        run: ./gradlew :core:test --stacktrace
+
+      - name: Inspect LlamaCpp runtime and tests
+        working-directory: source/VENEX_V0.1.8
+        run: |
+          find app/src -type f -print | grep -Ei 'LlamaCpp|llama' > /tmp/venex-llama-files.txt || true
+          echo "===== Matching source and test files ====="
+          cat /tmp/venex-llama-files.txt
+          while IFS= read -r FILE; do
+            echo "===== $FILE ====="
+            sed -n '1,360p' "$FILE"
+          done < /tmp/venex-llama-files.txt
+
+      - name: Run Android app unit tests
+        working-directory: source/VENEX_V0.1.8
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Build debug APK
+        working-directory: source/VENEX_V0.1.8
+        run: ./gradlew :app:assembleDebug -Pvenex.abis="$VENEX_ABI" --stacktrace
+
+      - name: Verify APK and version
+        working-directory: source/VENEX_V0.1.8
+        run: |
+          APK=$(find app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -print -quit)
+          test -n "$APK"
+          python3 - "$APK" <<'PY'
+          import json, os, sys
+          metadata = "app/build/outputs/apk/debug/output-metadata.json"
+          with open(metadata, encoding="utf-8") as f:
+              data = json.load(f)
+          item = data["elements"][0]
+          print("APK:", sys.argv[1], "size:", os.path.getsize(sys.argv[1]))
+          print("versionName:", item.get("versionName"), "versionCode:", item.get("versionCode"))
+          if item.get("versionName") != "0.1.8" or int(item.get("versionCode", 0)) != 8:
+              raise SystemExit("Expected VENEX 0.1.8 / versionCode 8")
+          PY
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: venex-v0.1.8-debug-apk
+          path: source/VENEX_V0.1.8/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: venex-v0.1.8-test-reports
+          path: |
+            source/VENEX_V0.1.8/core/build/reports/tests/
+            source/VENEX_V0.1.8/core/build/test-results/
+            source/VENEX_V0.1.8/app/build/reports/tests/
+            source/VENEX_V0.1.8/app/build/test-results/
+          if-no-files-found: warn
+          retention-days: 14
+ "$FILE"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
