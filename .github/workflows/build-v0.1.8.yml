@@ -13,10 +13,7 @@ on:
         required: true
         default: "arm64-v8a"
         type: choice
-        options:
-          - arm64-v8a
-          - armeabi-v7a
-          - x86_64
+        options: [arm64-v8a, armeabi-v7a, x86_64]
 
 permissions:
   contents: write
@@ -39,14 +36,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract V0.1.8 source archive
+      - name: Extract source archive
         run: |
           test -s VENEX_V0.1.8.zip
           mkdir -p source
           unzip -q VENEX_V0.1.8.zip -d source
           test -f source/VENEX_V0.1.8/settings.gradle.kts
           test -x source/VENEX_V0.1.8/gradlew
-          test -f source/VENEX_V0.1.8/scripts/fetch-llama-cpp.sh
           echo "VENEX_ROOT=$GITHUB_WORKSPACE/source/VENEX_V0.1.8" >> "$GITHUB_ENV"
 
       - name: Apply verified Compose import correction
@@ -87,18 +83,7 @@ jobs:
         working-directory: source/VENEX_V0.1.8
         run: ./gradlew :core:test --stacktrace
 
-      - name: Inspect LlamaCpp runtime and tests
-        working-directory: source/VENEX_V0.1.8
-        run: |
-          find app/src -type f -print | grep -Ei 'LlamaCpp|llama' > /tmp/venex-llama-files.txt || true
-          echo "===== Matching source and test files ====="
-          cat /tmp/venex-llama-files.txt
-          while IFS= read -r FILE; do
-            echo "===== $FILE ====="
-            sed -n '1,360p' "$FILE"
-          done < /tmp/venex-llama-files.txt
-
-      - name: Correct JVM test clock for real native-thread work
+      - name: Use real-time clock for tests with native worker threads
         working-directory: source/VENEX_V0.1.8
         run: |
           TEST=app/src/test/kotlin/com/venex/app/llm/LlamaCppRuntimeTest.kt
@@ -114,7 +99,7 @@ jobs:
         working-directory: source/VENEX_V0.1.8
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
-      - name: Persist verified source fixes to repository archive
+      - name: Persist verified source fixes in repository archive
         if: env.VENEX_TEST_CLOCK_PATCHED == 'true'
         run: |
           cd source
