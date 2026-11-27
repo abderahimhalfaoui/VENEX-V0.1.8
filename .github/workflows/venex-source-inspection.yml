@@ -1,0 +1,33 @@
+name: VENEX source inspection
+
+on:
+  push:
+    paths:
+      - ".github/workflows/venex-source-inspection.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract project source
+        run: |
+          test -s VENEX_V0.1.8.zip
+          mkdir -p source
+          unzip -q VENEX_V0.1.8.zip -d source
+          test -d source/VENEX_V0.1.8/app/src
+      - name: Collect LLM runtime and tests
+        run: |
+          mkdir -p inspection
+          find source/VENEX_V0.1.8/app/src -type f \\( -iname '*LlamaCpp*' -o -iname '*Runtime*' \\) -print
+          find source/VENEX_V0.1.8/app/src -type f \\( -iname '*LlamaCpp*' -o -iname '*Runtime*' \\) -exec cp --parents {} inspection/ \;
+      - uses: actions/upload-artifact@v4
+        with:
+          name: venex-llm-source-inspection
+          path: inspection/
+          if-no-files-found: error
+          retention-days: 3
