@@ -90,10 +90,12 @@ jobs:
           if grep -q 'import kotlinx.coroutines.test.runTest' "$TEST"; then
             sed -i 's/import kotlinx.coroutines.test.runTest/import kotlinx.coroutines.runBlocking/' "$TEST"
             sed -i 's/= runTest {/= runBlocking {/' "$TEST"
+            sed -i -E 's/^    fun (.*)\(\) = runBlocking \{/    fun \1(): Unit = runBlocking {/' "$TEST"
             echo "VENEX_TEST_CLOCK_PATCHED=true" >> "$GITHUB_ENV"
           fi
           ! grep -q 'runTest' "$TEST"
           grep -q 'import kotlinx.coroutines.runBlocking' "$TEST"
+          test "$(grep -cE '^    fun .*\(\): Unit = runBlocking \{' "$TEST")" -ge 10
 
       - name: Run Android app unit tests
         working-directory: source/VENEX_V0.1.8
