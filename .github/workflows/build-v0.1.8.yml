@@ -86,6 +86,15 @@ jobs:
         working-directory: source/VENEX_V0.1.8
         run: ./gradlew :core:test --stacktrace
 
+      - name: Inspect LlamaCpp runtime and tests
+        working-directory: source/VENEX_V0.1.8
+        run: |
+          find app/src -type f \\( -iname '*LlamaCpp*' -o -iname '*llama*' \\) -print
+          while IFS= read -r FILE; do
+            echo "===== $FILE ====="
+            sed -n '1,280p' "$FILE"
+          done < <(find app/src -type f \\( -iname '*LlamaCpp*' -o -iname '*llama*' \\) | sort)
+
       - name: Run Android app unit tests
         working-directory: source/VENEX_V0.1.8
         run: ./gradlew :app:testDebugUnitTest --stacktrace
