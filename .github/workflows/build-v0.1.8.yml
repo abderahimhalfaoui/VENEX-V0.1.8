@@ -89,11 +89,13 @@ jobs:
       - name: Inspect LlamaCpp runtime and tests
         working-directory: source/VENEX_V0.1.8
         run: |
-          find app/src -type f \\( -iname '*LlamaCpp*' -o -iname '*llama*' \\) -print
+          find app/src -type f -print | grep -Ei 'LlamaCpp|llama' > /tmp/venex-llama-files.txt || true
+          echo "===== Matching source and test files ====="
+          cat /tmp/venex-llama-files.txt
           while IFS= read -r FILE; do
             echo "===== $FILE ====="
-            sed -n '1,280p' "$FILE"
-          done < <(find app/src -type f \\( -iname '*LlamaCpp*' -o -iname '*llama*' \\) | sort)
+            sed -n '1,360p' "$FILE"
+          done < /tmp/venex-llama-files.txt
 
       - name: Run Android app unit tests
         working-directory: source/VENEX_V0.1.8
