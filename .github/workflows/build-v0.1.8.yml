@@ -30,7 +30,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      NDK_VERSION: "29.0.14206865"
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      NDK_VERSION: "27.2.12479018"
       CMAKE_VERSION: "3.22.1"
       VENEX_ABI: ${{ inputs.abi || 'arm64-v8a' }}
     steps:
@@ -44,6 +46,7 @@ jobs:
           unzip -q VENEX_V0.1.8.zip -d source
           test -f source/VENEX_V0.1.8/settings.gradle.kts
           test -x source/VENEX_V0.1.8/gradlew
+          test -f source/VENEX_V0.1.8/scripts/fetch-llama-cpp.sh
           echo "VENEX_ROOT=$GITHUB_WORKSPACE/source/VENEX_V0.1.8" >> "$GITHUB_ENV"
 
       - name: Set up JDK 17
@@ -52,14 +55,14 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install pinned Android NDK and CMake
+      - name: Install Android NDK and CMake
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
+          SDKMANAGER=$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n 1)
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
 
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
